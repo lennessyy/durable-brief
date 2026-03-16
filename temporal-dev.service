@@ -1,0 +1,12 @@
+[Unit]
+Description=Temporal Dev Server
+After=network.target
+
+[Service]
+Type=simple
+User=lennessy
+ExecStart=/home/lennessy/.temporalio/bin/temporal server start-dev --db-filename /tmp/temporal.db
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
