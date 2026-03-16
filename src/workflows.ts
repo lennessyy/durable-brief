@@ -10,6 +10,15 @@ const gog = proxyActivities<typeof activities>({
   },
 });
 
+const usps = proxyActivities<typeof activities>({
+  startToCloseTimeout: '45s',
+  retry: {
+    maximumAttempts: 3,
+    initialInterval: '5s',
+    backoffCoefficient: 2,
+  },
+});
+
 const llm = proxyActivities<typeof activities>({
   startToCloseTimeout: '60s',
   retry: {
@@ -32,21 +41,18 @@ export async function morningBriefWorkflow(): Promise<string> {
   log.info('Starting morning brief workflow');
 
   // Fetch all data in parallel — each retries independently
-  const [calendar, gmail, usps, amazon] = await Promise.all([
+  const [calendar, emails, uspsScans] = await Promise.all([
     gog.fetchCalendar(),
-    gog.fetchGmail(),
-    gog.fetchUSPSEmails(),
-    gog.fetchAmazonEmails(),
+    gog.fetchEmails(),
+    usps.fetchUSPSMailScans(),
   ]);
 
   log.info('All data fetched, generating brief');
 
-  // Generate the brief via LLM
-  const brief = await llm.generateBrief({ calendar, gmail, usps, amazon });
+  const brief = await llm.generateBrief({ calendar, emails, uspsScans });
 
   log.info('Brief generated, sending to Telegram');
 
-  // Deliver to Telegram
   await delivery.sendToTelegram(brief);
 
   log.info('Morning brief delivered');
