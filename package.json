@@ -1,0 +1,22 @@
+{
+  "name": "durableclaw",
+  "version": "0.1.0",
+  "description": "Durable OpenClaw morning brief powered by Temporal",
+  "main": "lib/worker.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node lib/worker.js",
+    "trigger": "node lib/trigger.js",
+    "start.watch": "nodemon --watch src -e ts --exec 'npm run build && npm start'"
+  },
+  "dependencies": {
+    "@temporalio/activity": "^1.11.7",
+    "@temporalio/client": "^1.11.7",
+    "@temporalio/worker": "^1.11.7",
+    "@temporalio/workflow": "^1.11.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@tsconfig/node22": "^22.0.0"
+  }
+}
