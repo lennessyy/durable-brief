@@ -1,0 +1,15 @@
+[Unit]
+Description=DurableClaw Temporal Worker
+After=temporal-dev.service
+Requires=temporal-dev.service
+
+[Service]
+Type=simple
+User=lennessy
+WorkingDirectory=/home/lennessy/workspace/durableclaw
+EnvironmentFile=/home/lennessy/workspace/durableclaw/.env
+ExecStart=/usr/bin/node lib/worker.js
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
