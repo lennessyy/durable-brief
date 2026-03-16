@@ -88,8 +88,9 @@ export async function fetchUSPSMailScans(): Promise<string> {
   const messageResult = await runGog('gmail', 'get', messageId, '--json');
   const message: GmailMessage = JSON.parse(messageResult);
 
-  const imageAttachments = (message.attachments ?? []).filter((a) =>
-    a.mimeType.startsWith('image/'),
+  // Filter to actual mail scans only — USPS ads use "content-" prefixed filenames
+  const imageAttachments = (message.attachments ?? []).filter(
+    (a) => a.mimeType.startsWith('image/') && !a.filename.startsWith('content-'),
   );
 
   if (!imageAttachments.length) {
