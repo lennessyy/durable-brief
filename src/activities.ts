@@ -120,7 +120,7 @@ export async function fetchUSPSMailScans(): Promise<string> {
       );
 
       // OCR with tesseract
-      const { stdout } = await execFileAsync(TESSERACT, [imgPath, 'stdout'], {
+      const { stdout } = await execFileAsync(TESSERACT, [imgPath, 'stdout', '--psm', '11'], {
         timeout: 10_000,
       });
 
