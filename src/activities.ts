@@ -19,31 +19,22 @@ export async function fetchCalendar(): Promise<string> {
 }
 
 export async function fetchEmails(): Promise<string> {
-  const yesterday = new Date(Date.now() - 86_400_000)
+  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000)
     .toISOString()
     .slice(0, 10)
     .replace(/-/g, '/');
 
-  const [unread, amazon] = await Promise.all([
-    runGog(
-      'gmail',
-      'messages',
-      'search',
-      'is:unread -category:promotions -category:social -category:forums',
-      '--max',
-      '10',
-    ),
-    runGog(
-      'gmail',
-      'messages',
-      'search',
-      `from:Amazon after:${yesterday}`,
-      '--max',
-      '5',
-    ),
-  ]);
+  // Fetch unread emails excluding USPS and Amazon (they have their own sections)
+  const unread = await runGog(
+    'gmail',
+    'messages',
+    'search',
+    `is:unread after:${twoDaysAgo} -category:promotions -category:social -category:forums -from:USPSInformedDelivery -from:Amazon`,
+    '--max',
+    '20',
+  );
 
-  return `== Unread ==\n${unread}\n\n== Amazon ==\n${amazon}`;
+  return unread || 'No unread emails (USPS and Amazon have their own sections).';
 }
 
 interface Attachment {
@@ -150,7 +141,7 @@ export async function generateBrief(input: BriefInput): Promise<string> {
 **Calendar:**
 ${input.calendar || 'No events today.'}
 
-**Email (unread + Amazon shipping):**
+**Email (all unread from last 48h):**
 ${input.emails || 'No unread emails.'}
 
 **USPS Informed Delivery (OCR from mail scans):**
@@ -158,7 +149,7 @@ ${input.uspsScans || 'Nothing from USPS.'}
 
 Requirements:
 - Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibe, include 😘), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is from based on the OCR text), Amazon (shipping/delivery only), end with one "small dare".`;
+- Sections: opening line (dangerous-muse vibe, include 😘), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data), Amazon (just the item name, no sender needed), end with one "small dare".`;
 
   const body = JSON.stringify({
     model: process.env.LLM_MODEL || 'llama-3.3-70b',
