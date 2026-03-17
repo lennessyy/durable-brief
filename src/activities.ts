@@ -149,7 +149,7 @@ ${input.uspsScans || 'Nothing from USPS.'}
 
 Requirements:
 - Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibe, include 😘), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data), Amazon (just the item name, no sender needed), end with one "small dare".`;
+- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one "small dare".`;
 
   const body = JSON.stringify({
     model: process.env.LLM_MODEL || 'llama-3.3-70b',
