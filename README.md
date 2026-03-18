@@ -1,23 +1,21 @@
-# durableclaw
+# Durable Brief
 
-Adds durable, retry-safe execution to OpenClaw agent workflows using [Temporal](https://temporal.io).
+Durable Brief is a small [Temporal](https://temporal.io) project that runs a daily AI briefing pipeline with durable execution. It fetches data from external sources, generates a summary with an LLM, and delivers the result to Telegram.
 
-## Problem
+## What it does
 
-The OpenClaw morning brief cron job fails ~26% of the time. Failures include:
-- `gog` CLI calls to Google APIs timing out
-- LLM provider (Venice AI) timing out or returning errors
-- The entire job timing out before all steps complete
-- Telegram delivery errors
-- USPS Informed Delivery images were never parsed — only metadata was shown
+The Workflow orchestrates each external step as a Temporal Activity so the full run is reliable and repeatable.
 
-When any single step fails, all work from previous steps is lost and the whole job must re-run from scratch.
+- Fetches Google Calendar data
+- Fetches Gmail data
+- Fetches USPS Informed Delivery scans
+- Uses local [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) to extract sender text from mail images
+- Generates a morning brief with an LLM
+- Sends the final brief to Telegram
 
-## Solution
+## Workflow shape
 
-Temporal wraps each step as an **Activity** with its own timeout and retry policy. Steps run in parallel where possible, retry independently on failure, and the Workflow only fails if retries are fully exhausted.
-
-USPS Informed Delivery mail scans are now downloaded and OCR'd locally using Tesseract, so the brief includes who the mail is actually from.
+This is the default execution flow and retry profile used by `morningBriefWorkflow`.
 
 ```
 morningBriefWorkflow
@@ -28,157 +26,100 @@ morningBriefWorkflow
 └── sendToTelegram(brief)   — 15s timeout, 5 retries
 ```
 
-### What each activity does
+## Architecture
 
-- **fetchCalendar()** — runs `gog calendar events --today --all`
-- **fetchEmails()** — runs two `gog` Gmail searches in parallel: unread inbox (excluding promotions/social/forums) and Amazon shipping/delivery emails from the last 24h
-- **fetchUSPSMailScans()** — finds the latest USPS Informed Delivery email, downloads the scanned mail images, and runs Tesseract OCR on each to extract sender info
-- **generateBrief(data)** — sends all collected data to the LLM (Venice AI) to generate the morning brief
-- **sendToTelegram(brief)** — delivers the brief to Telegram
-
-## Project structure
+The project is intentionally small: one Workflow, a set of Activities, one Worker, and one trigger script.
 
 ```
 src/
-├── activities.ts    # Activity implementations (gog CLI, Tesseract OCR, LLM, Telegram)
-├── workflows.ts     # morningBriefWorkflow definition
-├── worker.ts        # Temporal Worker — runs continuously, executes workflows
-└── trigger.ts       # CLI script to start a workflow execution and print the result
+├── activities.ts    # Activity implementations (Google API via gog CLI, Tesseract OCR, LLM, Telegram)
+├── workflows.ts     # morningBriefWorkflow orchestration
+├── worker.ts        # Temporal Worker process
+└── trigger.ts       # CLI script to start a Workflow and print the result
 ```
 
 ## Setup
 
+Use the steps below to install dependencies, configure credentials, and run the Workflow locally.
+
 ### Prerequisites
 
-- Node.js 22+
-- `gog` CLI installed and authenticated (`gog auth status` should show valid credentials)
-- Temporal CLI (`curl -sSf https://temporal.download/cli | sh`)
-- Tesseract OCR (`sudo apt install tesseract-ocr`)
+Install these tools first. Durable Brief depends on them at runtime for Workflow execution, data collection, and OCR.
 
-### Install and build
+- Node.js 22 or newer
+- [Temporal CLI](https://docs.temporal.io/cli) (for local dev server): `curl -sSf https://temporal.download/cli | sh`
+- [gog](https://github.com/reecerose/gog) CLI installed and authenticated (for Google Calendar and Gmail access)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) installed (`brew install tesseract` or `sudo apt install tesseract-ocr`)
+
+### Install
+
+Clone the repository, install packages, and build the TypeScript project.
 
 ```bash
-git clone <this-repo> ~/durableclaw
-cd ~/durableclaw
+git clone https://github.com/lenny/durableclaw.git
+cd durableclaw
 npm install
 npm run build
 ```
 
 ### Configure
 
+Create a local environment file and then set the required credentials and optional binary paths.
+
 ```bash
 cp .env.example .env
+# Edit .env with your values
 ```
 
-Edit `.env` with your actual credentials:
-- `LLM_API_KEY` — Venice API key (from OpenClaw's `agents/main/agent/auth-profiles.json`)
-- `TELEGRAM_BOT_TOKEN` — Telegram bot token (from `openclaw.json` → `channels.telegram.botToken`)
-- `TELEGRAM_CHAT_ID` — Telegram chat ID to deliver briefs to
+The following environment variables control model access, delivery, and local binary paths.
+
+| Variable | Description |
+|---|---|
+| `LLM_API_KEY` | API key for your LLM provider |
+| `LLM_BASE_URL` | OpenAI-compatible completions endpoint (default: Venice AI) |
+| `LLM_MODEL` | Model name (default: `llama-3.3-70b`) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token used for message delivery |
+| `TELEGRAM_CHAT_ID` | Telegram chat ID that receives briefs |
+| `GOG_PATH` | Path to the `gog` binary (default: `/usr/local/bin/gog`) |
+| `TESSERACT_PATH` | Path to the `tesseract` binary (default: `/usr/bin/tesseract`) |
 
 ### Run
 
-**1. Start the Temporal dev server** (keep running):
+Run these commands in separate terminals: start Temporal, start the Worker, then trigger a Workflow Execution.
+
+1. Start the Temporal dev server.
 
 ```bash
-temporal server start-dev --ui-ip 0.0.0.0 --ui-port 58233 --db-filename /tmp/temporal.db
+temporal server start-dev
 ```
 
-The Temporal Web UI will be available at http://192.168.50.243:58233 from the local network.
-
-**2. Start the Worker** (keep running):
+2. Start the Worker.
 
 ```bash
-cd ~/durableclaw
 npm start
 ```
 
-**3. Trigger a workflow** (from cron or manually):
+3. Trigger a Workflow.
 
 ```bash
-cd ~/durableclaw
 npm run trigger
 ```
 
-This starts `morningBriefWorkflow`, waits for it to complete, and prints the generated brief to stdout. Exit code 0 on success, 1 on failure.
+### Running as a service
 
-## Wiring up with OpenClaw cron
-
-The OpenClaw cron job should trigger the Temporal workflow instead of running `gog` commands directly.
-
-### What to change
-
-Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) so that its message tells the agent to exec the trigger script instead of running gog commands:
-
-**New cron job message:**
-
-> Run the durable morning brief. Use `exec` to run:
-> ```
-> cd /home/lennessy/durableclaw && node lib/trigger.js
-> ```
-> This script triggers the Temporal workflow which fetches calendar, email, and USPS mail scans (with OCR), generates the brief via LLM, and sends it to Telegram — all with automatic retries. Do NOT run `gog` commands directly or send to Telegram yourself. The workflow handles everything. Just report the output of the trigger script.
-
-The trigger script:
-1. Starts `morningBriefWorkflow` on the Temporal server
-2. Waits for it to complete (all retries happen inside the workflow)
-3. Prints the generated brief to stdout
-4. Exits 0 on success, 1 on failure
-
-The lunch reminder cron job can stay as-is — it's simple enough and doesn't fail often.
-
-### What NOT to change
-
-- Keep the same cron schedule (`30 8 * * *` America/Los_Angeles)
-- Keep the same delivery config (Telegram to `1201740265`)
-- Keep the same cron job ID — just update the message payload
-
-## Running as a service
-
-The Temporal server and Worker should survive reboots. Systemd services:
-
-```ini
-# /etc/systemd/system/temporal-dev.service
-[Unit]
-Description=Temporal Dev Server
-After=network.target
-
-[Service]
-Type=simple
-User=lennessy
-ExecStart=/home/linuxbrew/.linuxbrew/bin/temporal server start-dev --ui-ip 0.0.0.0 --ui-port 58233 --db-filename /tmp/temporal.db
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```ini
-# /etc/systemd/system/durableclaw-worker.service
-[Unit]
-Description=DurableClaw Temporal Worker
-After=temporal-dev.service
-Requires=temporal-dev.service
-
-[Service]
-Type=simple
-User=lennessy
-WorkingDirectory=/home/lennessy/durableclaw
-EnvironmentFile=/home/lennessy/durableclaw/.env
-ExecStart=/usr/bin/node lib/worker.js
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+If you want this to run continuously on Linux, use the provided `systemd` unit files and adjust paths for your system.
 
 ```bash
-sudo systemctl enable temporal-dev durableclaw-worker
-sudo systemctl start temporal-dev durableclaw-worker
+sudo cp services/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now temporal-dev durableclaw-worker
 ```
 
-## Monitoring
+## Adapt for your own agent
 
-- **Temporal Web UI**: http://192.168.50.243:58233 — see running/completed/failed workflows, drill into individual activity attempts and retries
-- **Worker logs**: `journalctl -u durableclaw-worker -f`
-- **Trigger output**: The trigger script prints the brief on success or the error on failure
+You can reuse this pattern for any multi-step agent pipeline that calls external APIs or services.
+
+1. Model each external call as an Activity with timeout and retry settings.
+2. Run independent calls in parallel with `Promise.all`.
+3. Keep orchestration logic in the Workflow and side effects in Activities.
+4. Trigger the Workflow from your existing scheduler or agent framework.

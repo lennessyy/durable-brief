@@ -5,8 +5,9 @@ After=network.target
 [Service]
 Type=simple
 User=lennessy
-ExecStart=/home/lennessy/.temporalio/bin/temporal server start-dev --db-filename /tmp/temporal.db
+ExecStart=/home/linuxbrew/.linuxbrew/bin/temporal server start-dev --ui-ip 0.0.0.0 --ui-port 58233 --db-filename /tmp/temporal.db
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
