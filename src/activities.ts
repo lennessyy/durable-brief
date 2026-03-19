@@ -180,6 +180,49 @@ Requirements:
   return data.choices[0].message.content;
 }
 
+export interface LunchMeeting {
+  title: string;
+  startHour: number;
+  startMinute: number;
+  timeStr: string;
+}
+
+export async function parseLunchMeetings(calendarText: string): Promise<LunchMeeting[]> {
+  if (!calendarText) return [];
+
+  const meetings: LunchMeeting[] = [];
+  const lines = calendarText.split('\n');
+
+  // Match time patterns like "12:30 PM", "1:00 PM", "13:00", "12:30pm"
+  const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/;
+
+  for (const line of lines) {
+    const match = line.match(timePattern);
+    if (!match) continue;
+
+    let hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    const ampm = match[3]?.toUpperCase();
+
+    if (ampm === 'PM' && hour !== 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+
+    // Check if meeting starts between 12:00 and 14:00 (exclusive)
+    if (hour >= 12 && hour < 14) {
+      meetings.push({
+        title: line.trim(),
+        startHour: hour,
+        startMinute: minute,
+        timeStr: match[0],
+      });
+    }
+  }
+
+  // Sort by start time
+  meetings.sort((a, b) => a.startHour * 60 + a.startMinute - (b.startHour * 60 + b.startMinute));
+  return meetings;
+}
+
 export async function sendToTelegram(message: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;

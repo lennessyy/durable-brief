@@ -32,15 +32,40 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 - Keep the same cron job ID — just update the message payload
 - The lunch reminder cron job can stay as-is
 
+## Lunch meeting reminders
+
+The workflow now handles lunch meeting reminders directly. After delivering the brief, it parses the calendar for meetings between 12:00 PM and 2:00 PM and sends Telegram reminders at 30 minutes and 10 minutes before each one. The workflow stays running until all reminders are sent (or cancelled).
+
+### Handling "stop" replies
+
+When Lenny replies **STOP** in the Telegram chat, you need to send a signal to the running workflow to cancel remaining reminders. Run:
+
+```
+cd /home/lennessy/durableclaw && npx temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stopReminders
+```
+
+The workflow ID follows the pattern `morning-brief-YYYY-MM-DD` (one per day). Once the signal is received, all pending reminders for that day are cancelled immediately.
+
+### What to watch for
+
+- After the brief is delivered, the workflow keeps running if there are lunch meetings — this is expected. Do not treat it as stuck.
+- The reminder messages include "_Reply STOP to cancel reminders._" so Lenny knows the option is available.
+- Only watch for the word "stop" (case-insensitive) as a standalone reply from Lenny in the Telegram chat. Other messages should be ignored.
+
 ## Workflow steps
 
 ```
 morningBriefWorkflow
-├── fetchCalendar()         — 30s timeout, 3 retries     ┐
-├── fetchEmails()           — 30s timeout, 3 retries     ├── parallel
-├── fetchUSPSMailScans()    — 45s timeout, 3 retries     ┘
-├── generateBrief(data)     — 60s timeout, 3 retries
-└── sendToTelegram(brief)   — 15s timeout, 5 retries
+├── fetchCalendar()         — 30s timeout, 5 retries     ┐
+├── fetchEmails()           — 30s timeout, 5 retries     ├── parallel
+├── fetchUSPSMailScans()    — 45s timeout, 5 retries     ┘
+├── generateBrief(data)     — 60s timeout, 5 retries
+├── sendToTelegram(brief)   — 15s timeout, 5 retries
+├── parseLunchMeetings()    — 15s timeout, 3 retries
+└── [for each 12–2 PM meeting]
+    ├── ⏳ wait until 30 min before → sendToTelegram(reminder)
+    └── ⏳ wait until 10 min before → sendToTelegram(reminder)
+    (cancelled immediately if stopReminders signal is received)
 ```
 
 ## Monitoring
