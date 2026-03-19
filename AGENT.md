@@ -25,6 +25,8 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 3. Prints the generated brief to stdout and exits immediately — it does NOT wait for lunch reminders to finish
 4. Exits 0 on success, 1 on failure
 
+**Important:** The workflow already sends the brief to Telegram directly. The output from the trigger script is just confirmation that the brief was generated and delivered. Do NOT send the trigger output to Lenny — he already has it in Telegram.
+
 ## What NOT to change
 
 - Keep the same cron schedule (`30 8 * * *` America/Los_Angeles)
