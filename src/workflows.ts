@@ -1,4 +1,4 @@
-import { proxyActivities, defineSignal, setHandler, condition, log } from '@temporalio/workflow';
+import { proxyActivities, defineSignal, defineQuery, setHandler, condition, log } from '@temporalio/workflow';
 import type * as activities from './activities';
 
 const gog = proxyActivities<typeof activities>({
@@ -48,8 +48,13 @@ const reminder = proxyActivities<typeof activities>({
 });
 
 export const stopRemindersSignal = defineSignal('stopReminders');
+export const briefQuery = defineQuery<string | null>('getBrief');
 
 export async function morningBriefWorkflow(): Promise<string> {
+  let briefResult: string | null = null;
+
+  setHandler(briefQuery, () => briefResult);
+
   log.info('Starting morning brief workflow');
 
   // Fetch all data in parallel — each retries independently
@@ -66,6 +71,8 @@ export async function morningBriefWorkflow(): Promise<string> {
   log.info('Brief generated, sending to Telegram');
 
   await delivery.sendToTelegram(brief);
+
+  briefResult = brief;
 
   log.info('Morning brief delivered, checking for lunch meetings');
 

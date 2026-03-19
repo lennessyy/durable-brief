@@ -21,8 +21,8 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 ## How the trigger script works
 
 1. Starts `morningBriefWorkflow` on the Temporal server (localhost:7233)
-2. Waits for it to complete (all retries happen inside the workflow)
-3. Prints the generated brief to stdout
+2. Polls the `getBrief` query every 2 seconds until the brief is ready
+3. Prints the generated brief to stdout and exits immediately — it does NOT wait for lunch reminders to finish
 4. Exits 0 on success, 1 on failure
 
 ## What NOT to change
@@ -41,7 +41,7 @@ The workflow now handles lunch meeting reminders directly. After delivering the 
 When Lenny replies **STOP** in the Telegram chat, you need to send a signal to the running workflow to cancel remaining reminders. Run:
 
 ```
-cd /home/lennessy/durableclaw && npx temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stopReminders
+cd /home/lennessy/workspace/durableclaw && npx temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stopReminders
 ```
 
 The workflow ID follows the pattern `morning-brief-YYYY-MM-DD` (one per day). Once the signal is received, all pending reminders for that day are cancelled immediately.
