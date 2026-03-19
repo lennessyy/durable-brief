@@ -197,32 +197,38 @@ export async function parseLunchMeetings(calendarText: string): Promise<LunchMee
   const meetings: LunchMeeting[] = [];
   const lines = calendarText.split('\n');
 
-  // Match time patterns like "12:30 PM", "1:00 PM", "13:00", "12:30pm"
-  const timePattern = /(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/;
+  // gog output format: <calendar_id>  <event_id>  <start_iso>  <end_iso>  <title>
+  // Fields are separated by 2+ whitespace characters
+  const isoPattern = /(\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2}):\d{2}[+-]\d{2}:\d{2})/;
 
   for (const line of lines) {
-    const match = line.match(timePattern);
+    const match = line.match(isoPattern);
     if (!match) continue;
 
-    // Skip personal lunch events - only track actual meetings
-    if (line.toLowerCase().includes('lunch')) continue;
-
-    let hour = parseInt(match[1], 10);
-    const minute = parseInt(match[2], 10);
-    const ampm = match[3]?.toUpperCase();
-
-    if (ampm === 'PM' && hour !== 12) hour += 12;
-    if (ampm === 'AM' && hour === 12) hour = 0;
+    const hour = parseInt(match[2], 10);
+    const minute = parseInt(match[3], 10);
 
     // Check if meeting starts between 12:00 and 14:00 (exclusive)
-    if (hour >= 12 && hour < 14) {
-      meetings.push({
-        title: line.trim(),
-        startHour: hour,
-        startMinute: minute,
-        timeStr: match[0],
-      });
-    }
+    if (hour < 12 || hour >= 14) continue;
+
+    // Extract the title (last field after splitting on 2+ spaces)
+    const fields = line.trim().split(/\s{2,}/);
+    const title = fields[fields.length - 1] || '';
+
+    // Skip personal lunch events - only track actual meetings
+    if (title.toLowerCase().includes('lunch')) continue;
+
+    // Format a human-readable time like "12:30 PM"
+    const displayHour = hour > 12 ? hour - 12 : hour;
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const timeStr = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
+
+    meetings.push({
+      title,
+      startHour: hour,
+      startMinute: minute,
+      timeStr,
+    });
   }
 
   // Sort by start time
