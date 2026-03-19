@@ -177,7 +177,11 @@ Requirements:
   const data = (await res.json()) as {
     choices: { message: { content: string } }[];
   };
-  return data.choices[0].message.content;
+  const content = data.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error('LLM returned an empty brief');
+  }
+  return content;
 }
 
 export interface LunchMeeting {
