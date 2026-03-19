@@ -5,7 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=lennessy
-ExecStart=/home/linuxbrew/.linuxbrew/bin/temporal server start-dev --ui-ip 0.0.0.0 --ui-port 58233 --db-filename /tmp/temporal.db
+# Note: --ui-ip 0.0.0.0 exposes the Temporal UI to your local network.
+ExecStart=/home/linuxbrew/.linuxbrew/bin/temporal server start-dev --ui-ip 0.0.0.0 --ui-port 58233 --db-filename /home/lennessy/.openclaw/temporal.db
 Restart=always
 RestartSec=5
 

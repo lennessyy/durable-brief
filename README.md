@@ -109,6 +109,8 @@ npm run trigger
 
 If you want this to run continuously on Linux, use the provided `systemd` unit files and adjust paths for your system.
 
+The included `temporal-dev.service` binds the Temporal UI to `0.0.0.0`, so it is reachable from other devices on your home network. This is convenient for local monitoring, but use it with caution and only on trusted networks.
+
 ```bash
 sudo cp services/*.service /etc/systemd/system/
 sudo systemctl daemon-reload

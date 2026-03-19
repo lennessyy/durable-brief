@@ -16,6 +16,7 @@ const usps = proxyActivities<typeof activities>({
     maximumAttempts: 3,
     initialInterval: '5s',
     backoffCoefficient: 2,
+    
   },
 });
 
