@@ -200,6 +200,9 @@ export async function parseLunchMeetings(calendarText: string): Promise<LunchMee
     const match = line.match(timePattern);
     if (!match) continue;
 
+    // Skip personal lunch events - only track actual meetings
+    if (line.toLowerCase().includes('lunch')) continue;
+
     let hour = parseInt(match[1], 10);
     const minute = parseInt(match[2], 10);
     const ampm = match[3]?.toUpperCase();

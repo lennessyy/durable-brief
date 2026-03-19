@@ -14,7 +14,7 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 
 > Run the durable morning brief. Use `exec` to run:
 > ```
-> cd /home/lennessy/durableclaw && node lib/trigger.js
+> cd /home/lennessy/workspace/durableclaw && node lib/trigger.js
 > ```
 > This script triggers the Temporal workflow which fetches calendar, email, and USPS mail scans (with OCR), generates the brief via LLM, and sends it to Telegram — all with automatic retries. Do NOT run `gog` commands directly or send to Telegram yourself. The workflow handles everything. Just report the output of the trigger script.
 
