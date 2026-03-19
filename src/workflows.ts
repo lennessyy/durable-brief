@@ -4,7 +4,7 @@ import type * as activities from './activities';
 const gog = proxyActivities<typeof activities>({
   startToCloseTimeout: '30s',
   retry: {
-    maximumAttempts: 3,
+    maximumAttempts: 5,
     initialInterval: '5s',
     backoffCoefficient: 2,
   },
@@ -13,7 +13,7 @@ const gog = proxyActivities<typeof activities>({
 const usps = proxyActivities<typeof activities>({
   startToCloseTimeout: '45s',
   retry: {
-    maximumAttempts: 3,
+    maximumAttempts: 5,
     initialInterval: '5s',
     backoffCoefficient: 2,
     
@@ -23,7 +23,7 @@ const usps = proxyActivities<typeof activities>({
 const llm = proxyActivities<typeof activities>({
   startToCloseTimeout: '60s',
   retry: {
-    maximumAttempts: 3,
+    maximumAttempts: 5,
     initialInterval: '10s',
     backoffCoefficient: 2,
   },
