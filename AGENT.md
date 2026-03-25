@@ -8,33 +8,7 @@ DurableClaw wraps the morning brief pipeline in a Temporal workflow. Each step (
 
 ## Setup
 
-### 1. Create a virtual environment and install dependencies
-
-```bash
-cd /home/lennessy/durableclaw
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-### 2. Install the systemd service
-
-```bash
-sudo cp services/durableclaw-worker-python.service /etc/systemd/system/durableclaw-worker.service
-sudo systemctl daemon-reload
-sudo systemctl enable durableclaw-worker
-sudo systemctl start durableclaw-worker
-```
-
-This replaces the old Node.js worker service. The `.env` file is the same — no changes needed there.
-
-### 3. Verify the worker is running
-
-```bash
-sudo systemctl status durableclaw-worker
-journalctl -u durableclaw-worker -f
-```
-
-You should see "Worker started on task queue: morning-brief".
+Lenny runs the Python worker manually — you don't need to start or manage it. Just make sure you use the correct trigger command below.
 
 ## What to change
 
