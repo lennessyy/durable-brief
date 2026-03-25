@@ -1,5 +1,8 @@
 import asyncio
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from temporalio.client import Client
 from temporalio.converter import DataConverter, ExternalStorage
 from temporalio.worker import Worker
