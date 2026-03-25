@@ -112,7 +112,7 @@ class MorningBriefWorkflow:
             if self._stopped:
                 break
 
-            now = datetime.now()
+            now = workflow.now()
             meeting_time = now.replace(
                 hour=meeting.start_hour, minute=meeting.start_minute, second=0, microsecond=0,
             )
@@ -120,7 +120,7 @@ class MorningBriefWorkflow:
 
             # 30-minute reminder
             thirty_min_before = meeting_ms - 30 * 60 * 1000
-            wait_ms = thirty_min_before - datetime.now().timestamp() * 1000
+            wait_ms = thirty_min_before - workflow.now().timestamp() * 1000
 
             if wait_ms > 0:
                 try:
@@ -132,7 +132,7 @@ class MorningBriefWorkflow:
                 if self._stopped:
                     break
 
-            if not self._stopped and datetime.now().timestamp() * 1000 < meeting_ms:
+            if not self._stopped and workflow.now().timestamp() * 1000 < meeting_ms:
                 await workflow.execute_activity(
                     "send_to_telegram",
                     f"⏰ *30 min reminder:* {meeting.title}\n\n_Reply STOP to cancel reminders._",
@@ -142,7 +142,7 @@ class MorningBriefWorkflow:
 
             # 10-minute reminder
             ten_min_before = meeting_ms - 10 * 60 * 1000
-            wait_ms = ten_min_before - datetime.now().timestamp() * 1000
+            wait_ms = ten_min_before - workflow.now().timestamp() * 1000
 
             if wait_ms > 0:
                 try:
@@ -154,7 +154,7 @@ class MorningBriefWorkflow:
                 if self._stopped:
                     break
 
-            if not self._stopped and datetime.now().timestamp() * 1000 < meeting_ms:
+            if not self._stopped and workflow.now().timestamp() * 1000 < meeting_ms:
                 await workflow.execute_activity(
                     "send_to_telegram",
                     f"⏰ *10 min reminder:* {meeting.title}",
