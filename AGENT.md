@@ -6,6 +6,36 @@ This file is for you, the OpenClaw agent. It tells you how to wire up the Tempor
 
 DurableClaw wraps the morning brief pipeline in a Temporal workflow. Each step (calendar, email, USPS mail scans, LLM generation, Telegram delivery) is a separate Activity with its own timeout and retry policy. You no longer need to run `gog` commands, call the LLM, or send to Telegram yourself — the workflow handles everything, including retries.
 
+## Setup
+
+### 1. Create a virtual environment and install dependencies
+
+```bash
+cd /home/lennessy/durableclaw
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+### 2. Install the systemd service
+
+```bash
+sudo cp services/durableclaw-worker-python.service /etc/systemd/system/durableclaw-worker.service
+sudo systemctl daemon-reload
+sudo systemctl enable durableclaw-worker
+sudo systemctl start durableclaw-worker
+```
+
+This replaces the old Node.js worker service. The `.env` file is the same — no changes needed there.
+
+### 3. Verify the worker is running
+
+```bash
+sudo systemctl status durableclaw-worker
+journalctl -u durableclaw-worker -f
+```
+
+You should see "Worker started on task queue: morning-brief".
+
 ## What to change
 
 Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) so that its message tells you to exec the trigger script instead of running gog commands directly.
@@ -14,14 +44,14 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 
 > Run the durable morning brief. Use `exec` to run:
 > ```
-> cd /home/lennessy/workspace/durableclaw && node lib/trigger.js
+> cd /home/lennessy/durableclaw && .venv/bin/python trigger.py
 > ```
 > This script triggers the Temporal workflow which fetches calendar, email, and USPS mail scans (with OCR), generates the brief via LLM, and sends it to Telegram — all with automatic retries. Do NOT run `gog` commands directly or send to Telegram yourself. The workflow handles everything. Just report the output of the trigger script.
 
 ## How the trigger script works
 
-1. Starts `morningBriefWorkflow` on the Temporal server (localhost:7233)
-2. Polls the `getBrief` query every 2 seconds until the brief is ready
+1. Starts `MorningBriefWorkflow` on the Temporal server (localhost:7233)
+2. Polls the `get_brief` query every 2 seconds until the brief is ready
 3. Prints the generated brief to stdout and exits immediately — it does NOT wait for lunch reminders to finish
 4. Exits 0 on success, 1 on failure
 
@@ -43,7 +73,7 @@ The workflow now handles lunch meeting reminders directly. After delivering the 
 When Lenny replies **STOP** in the Telegram chat, you need to send a signal to the running workflow to cancel remaining reminders. Run:
 
 ```
-cd /home/lennessy/workspace/durableclaw && npx temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stopReminders
+cd /home/lennessy/durableclaw && temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stop_reminders
 ```
 
 The workflow ID follows the pattern `morning-brief-YYYY-MM-DD` (one per day). Once the signal is received, all pending reminders for that day are cancelled immediately.
@@ -57,18 +87,24 @@ The workflow ID follows the pattern `morning-brief-YYYY-MM-DD` (one per day). On
 ## Workflow steps
 
 ```
-morningBriefWorkflow
-├── fetchCalendar()         — 30s timeout, 5 retries     ┐
-├── fetchEmails()           — 30s timeout, 5 retries     ├── parallel
-├── fetchUSPSMailScans()    — 45s timeout, 5 retries     ┘
-├── generateBrief(data)     — 60s timeout, 5 retries
-├── sendToTelegram(brief)   — 15s timeout, 5 retries
-├── parseLunchMeetings()    — 15s timeout, 3 retries
+MorningBriefWorkflow
+├── fetch_calendar()          — 30s timeout, 5 retries     ┐
+├── fetch_emails()            — 30s timeout, 5 retries     ├── parallel
+├── fetch_usps_mail_scans()   — 45s timeout, 5 retries     ┘
+├── generate_brief(data)      — 60s timeout, 5 retries
+├── send_to_telegram(brief)   — 15s timeout, 5 retries
+├── parse_lunch_meetings()    — 15s timeout, 3 retries
 └── [for each 12–2 PM meeting]
-    ├── ⏳ wait until 30 min before → sendToTelegram(reminder)
-    └── ⏳ wait until 10 min before → sendToTelegram(reminder)
-    (cancelled immediately if stopReminders signal is received)
+    ├── ⏳ wait until 30 min before → send_to_telegram(reminder)
+    └── ⏳ wait until 10 min before → send_to_telegram(reminder)
+    (cancelled immediately if stop_reminders signal is received)
 ```
+
+## Large payload storage
+
+This branch uses the experimental `ExternalStorage` API to offload large payloads to local disk (`/tmp/temporal-payload-store`). Payloads over 1KB are stored on disk and replaced with a reference token in the event history. Stored payloads are organized by namespace and workflow ID when serialization context is available.
+
+This is for testing purposes — in production, you'd replace `LocalDiskStorageDriver` with an S3 driver.
 
 ## Monitoring
 

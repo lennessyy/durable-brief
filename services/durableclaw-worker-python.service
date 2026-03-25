@@ -1,0 +1,16 @@
+[Unit]
+Description=DurableClaw Python Temporal Worker
+After=temporal-dev.service
+Requires=temporal-dev.service
+
+[Service]
+Type=simple
+User=lennessy
+WorkingDirectory=/home/lennessy/durableclaw
+EnvironmentFile=/home/lennessy/durableclaw/.env
+ExecStart=/home/lennessy/durableclaw/.venv/bin/python worker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
