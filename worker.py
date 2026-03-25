@@ -28,7 +28,7 @@ async def main() -> None:
 
     worker = Worker(
         client,
-        task_queue="morning-brief",
+        task_queue="morning-brief-python",
         workflows=[MorningBriefWorkflow],
         activities=[
             fetch_calendar,
@@ -40,7 +40,7 @@ async def main() -> None:
         ],
     )
 
-    print("Worker started on task queue: morning-brief")
+    print("Worker started on task queue: morning-brief-python")
     await worker.run()
 
 

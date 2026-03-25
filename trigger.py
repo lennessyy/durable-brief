@@ -22,7 +22,7 @@ async def main() -> None:
     handle = await client.start_workflow(
         "MorningBriefWorkflow",
         id=workflow_id,
-        task_queue="morning-brief",
+        task_queue="morning-brief-python",
     )
 
     print(f"Started workflow: {handle.id}")
