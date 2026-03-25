@@ -151,10 +151,12 @@ Requirements:
 - Keep it concise (10–20 lines), high-signal.
 - Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one "small dare".`;
 
+
   const body = JSON.stringify({
     model: process.env.LLM_MODEL || 'llama-3.3-70b',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2048,
+    venice_parameters: { strip_thinking_response: true },
   });
 
   const res = await fetch(
@@ -175,11 +177,15 @@ Requirements:
   }
 
   const data = (await res.json()) as {
-    choices: { message: { content: string } }[];
+    choices: { message: { content: string; reasoning_content?: string } }[];
   };
-  const content = data.choices[0]?.message?.content;
+  let content = data.choices[0]?.message?.content;
   if (!content) {
     throw new Error('LLM returned an empty brief');
+  }
+  // Telegram has a 4096 character limit
+  if (content.length > 4000) {
+    content = content.slice(0, 4000) + '...[truncated]';
   }
   return content;
 }

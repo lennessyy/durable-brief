@@ -6,7 +6,7 @@ Requires=temporal-dev.service
 [Service]
 Type=simple
 User=lennessy
-WorkingDirectory=/home/lennessy/durableclaw
+WorkingDirectory=/home/lennessy/workspace/durableclaw
 EnvironmentFile=/home/lennessy/durableclaw/.env
 ExecStart=/usr/bin/node lib/worker.js
 Restart=always
