@@ -1,6 +1,8 @@
+import asyncio
 from datetime import timedelta
 
 from temporalio import workflow
+from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from activities import BriefInput, LunchMeeting
@@ -25,32 +27,36 @@ class MorningBriefWorkflow:
     async def run(self) -> str:
         workflow.logger.info("Starting morning brief workflow")
 
-        gog_opts = workflow.ActivityConfig(
-            start_to_close_timeout=timedelta(seconds=30),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=5)),
+        retry_5 = RetryPolicy(
+            maximum_attempts=5,
+            initial_interval=timedelta(seconds=5),
+            backoff_coefficient=2,
         )
-        usps_opts = workflow.ActivityConfig(
-            start_to_close_timeout=timedelta(seconds=45),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=5)),
-        )
-        llm_opts = workflow.ActivityConfig(
-            start_to_close_timeout=timedelta(seconds=60),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=10)),
-        )
-        delivery_opts = workflow.ActivityConfig(
-            start_to_close_timeout=timedelta(seconds=15),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=3)),
-        )
-        reminder_opts = workflow.ActivityConfig(
-            start_to_close_timeout=timedelta(seconds=15),
-            retry_policy=workflow.RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=3)),
+        retry_3 = RetryPolicy(
+            maximum_attempts=3,
+            initial_interval=timedelta(seconds=3),
+            backoff_coefficient=2,
         )
 
         # Fetch all data in parallel
-        calendar, emails, usps_scans = await workflow.gather(
-            workflow.execute_activity("fetch_calendar", **gog_opts.__dict__),
-            workflow.execute_activity("fetch_emails", **gog_opts.__dict__),
-            workflow.execute_activity("fetch_usps_mail_scans", **usps_opts.__dict__),
+        calendar_task = workflow.execute_activity(
+            "fetch_calendar",
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=retry_5,
+        )
+        emails_task = workflow.execute_activity(
+            "fetch_emails",
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=retry_5,
+        )
+        usps_task = workflow.execute_activity(
+            "fetch_usps_mail_scans",
+            start_to_close_timeout=timedelta(seconds=45),
+            retry_policy=retry_5,
+        )
+
+        calendar, emails, usps_scans = await asyncio.gather(
+            calendar_task, emails_task, usps_task,
         )
 
         workflow.logger.info("All data fetched, generating brief")
@@ -58,34 +64,49 @@ class MorningBriefWorkflow:
         brief = await workflow.execute_activity(
             "generate_brief",
             BriefInput(calendar=calendar, emails=emails, usps_scans=usps_scans),
-            **llm_opts.__dict__,
+            start_to_close_timeout=timedelta(seconds=60),
+            retry_policy=RetryPolicy(
+                maximum_attempts=5,
+                initial_interval=timedelta(seconds=10),
+                backoff_coefficient=2,
+            ),
         )
 
         workflow.logger.info("Brief generated, sending to Telegram")
 
-        await workflow.execute_activity("send_to_telegram", brief, **delivery_opts.__dict__)
+        await workflow.execute_activity(
+            "send_to_telegram",
+            brief,
+            start_to_close_timeout=timedelta(seconds=15),
+            retry_policy=retry_5,
+        )
 
         self._brief = brief
 
         workflow.logger.info("Morning brief delivered, checking for lunch meetings")
 
         lunch_meetings: list[LunchMeeting] = await workflow.execute_activity(
-            "parse_lunch_meetings", calendar, **reminder_opts.__dict__,
+            "parse_lunch_meetings",
+            calendar,
+            start_to_close_timeout=timedelta(seconds=15),
+            retry_policy=retry_3,
         )
 
         if lunch_meetings:
             workflow.logger.info(f"Found {len(lunch_meetings)} lunch meeting(s), setting up reminders")
-            await self._send_lunch_reminders(lunch_meetings, delivery_opts)
+            await self._send_lunch_reminders(lunch_meetings)
 
         workflow.logger.info("Morning brief workflow complete")
         return brief
 
-    async def _send_lunch_reminders(
-        self,
-        meetings: list[LunchMeeting],
-        delivery_opts: workflow.ActivityConfig,
-    ) -> None:
+    async def _send_lunch_reminders(self, meetings: list[LunchMeeting]) -> None:
         from datetime import datetime
+
+        delivery_retry = RetryPolicy(
+            maximum_attempts=5,
+            initial_interval=timedelta(seconds=3),
+            backoff_coefficient=2,
+        )
 
         for meeting in meetings:
             if self._stopped:
@@ -102,17 +123,21 @@ class MorningBriefWorkflow:
             wait_ms = thirty_min_before - datetime.now().timestamp() * 1000
 
             if wait_ms > 0:
-                stopped = await workflow.wait_condition(
-                    lambda: self._stopped, timeout=timedelta(milliseconds=wait_ms),
-                )
-                if stopped:
+                try:
+                    await workflow.wait_condition(
+                        lambda: self._stopped, timeout=timedelta(milliseconds=wait_ms),
+                    )
+                except asyncio.TimeoutError:
+                    pass  # Timer expired, time to send the reminder
+                if self._stopped:
                     break
 
             if not self._stopped and datetime.now().timestamp() * 1000 < meeting_ms:
                 await workflow.execute_activity(
                     "send_to_telegram",
                     f"⏰ *30 min reminder:* {meeting.title}\n\n_Reply STOP to cancel reminders._",
-                    **delivery_opts.__dict__,
+                    start_to_close_timeout=timedelta(seconds=15),
+                    retry_policy=delivery_retry,
                 )
 
             # 10-minute reminder
@@ -120,15 +145,20 @@ class MorningBriefWorkflow:
             wait_ms = ten_min_before - datetime.now().timestamp() * 1000
 
             if wait_ms > 0:
-                stopped = await workflow.wait_condition(
-                    lambda: self._stopped, timeout=timedelta(milliseconds=wait_ms),
-                )
-                if stopped:
+                try:
+                    await workflow.wait_condition(
+                        lambda: self._stopped, timeout=timedelta(milliseconds=wait_ms),
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                if self._stopped:
                     break
 
             if not self._stopped and datetime.now().timestamp() * 1000 < meeting_ms:
                 await workflow.execute_activity(
                     "send_to_telegram",
                     f"⏰ *10 min reminder:* {meeting.title}",
-                    **delivery_opts.__dict__,
+                    start_to_close_timeout=timedelta(seconds=15),
+                    retry_policy=delivery_retry,
                 )
+
