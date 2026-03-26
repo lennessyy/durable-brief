@@ -1,4 +1,4 @@
-import { proxyActivities, defineSignal, defineQuery, setHandler, condition, log } from '@temporalio/workflow';
+import { proxyActivities, defineSignal, defineQuery, setHandler, condition, log, ActivityFailure } from '@temporalio/workflow';
 import type * as activities from './activities';
 
 const gog = proxyActivities<typeof activities>({
@@ -64,20 +64,21 @@ export async function morningBriefWorkflow(): Promise<string> {
     usps.fetchUSPSMailScans(),
   ]);
 
-  log.info('All data fetched, generating brief');
+  log.info('All data fetched, parsing lunch meetings and generating brief');
 
-  const brief = await llm.generateBrief({ calendar, emails, uspsScans });
-
-  log.info('Brief generated, sending to Telegram');
-
-  await delivery.sendToTelegram(brief);
-
-  briefResult = brief;
-
-  log.info('Morning brief delivered, checking for lunch meetings');
-
-  // Check for lunch meetings between 12:00 PM and 2:00 PM
+  // Parse lunch meetings from calendar immediately — don't wait on the LLM
   const lunchMeetings = await reminder.parseLunchMeetings(calendar);
+
+  try {
+    const brief = await llm.generateBrief({ calendar, emails, uspsScans });
+    log.info('Brief generated, sending to Telegram');
+    await delivery.sendToTelegram(brief);
+    briefResult = brief;
+    log.info('Morning brief delivered');
+  } catch (err) {
+    if (!(err instanceof ActivityFailure)) throw err;
+    log.error(`Brief generation failed, skipping: ${err.message}`);
+  }
 
   if (lunchMeetings.length > 0) {
     log.info(`Found ${lunchMeetings.length} lunch meeting(s), setting up reminders`);
