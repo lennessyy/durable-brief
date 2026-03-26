@@ -107,50 +107,7 @@ class BriefInput:
 
 @activity.defn
 async def generate_brief(input: BriefInput) -> str:
-    import json
-
-    prompt = f"""Generate Lenny's morning brief for today.
-
-**Calendar:**
-{input.calendar or "No events today."}
-
-**Email (all unread from last 48h):**
-{input.emails or "No unread emails."}
-
-**USPS Informed Delivery (OCR from mail scans):**
-{input.usps_scans or "Nothing from USPS."}
-
-Requirements:
-- Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one "small dare"."""
-
-    body = json.dumps({
-        "model": os.environ.get("LLM_MODEL", "llama-3.3-70b"),
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 2048,
-    })
-
-    import aiohttp
-
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.venice.ai/api/v1/chat/completions")
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            base_url,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {os.environ['LLM_API_KEY']}",
-            },
-            data=body,
-            timeout=aiohttp.ClientTimeout(total=55),
-        ) as res:
-            if res.status != 200:
-                raise RuntimeError(f"LLM API error: {res.status} {await res.text()}")
-            data = await res.json()
-
-    content = data["choices"][0]["message"]["content"]
-    if not content:
-        raise RuntimeError("LLM returned an empty brief")
-    return content
+    return "[STUB] Morning brief goes here."
 
 
 @dataclass
