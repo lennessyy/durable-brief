@@ -21,11 +21,13 @@ const usps = proxyActivities<typeof activities>({
 });
 
 const llm = proxyActivities<typeof activities>({
-  startToCloseTimeout: '60s',
+  startToCloseTimeout: '2m',
+  scheduleToCloseTimeout: '15m',
   retry: {
-    maximumAttempts: 5,
-    initialInterval: '10s',
+    maximumAttempts: 10,
+    initialInterval: '15s',
     backoffCoefficient: 2,
+    maximumInterval: '3m',
   },
 });
 

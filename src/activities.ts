@@ -1,3 +1,4 @@
+import { log } from '@temporalio/activity';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { mkdtemp, rm } from 'fs/promises';
@@ -181,6 +182,7 @@ Requirements:
   };
   let content = data.choices[0]?.message?.content;
   if (!content) {
+    log.warn('Venice returned empty content', { response: JSON.stringify(data) });
     throw new Error('LLM returned an empty brief');
   }
   // Telegram has a 4096 character limit
