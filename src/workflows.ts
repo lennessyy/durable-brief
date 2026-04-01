@@ -121,7 +121,7 @@ async function sendLunchReminders(meetings: activities.LunchMeeting[], isStopped
 
     if (!isStopped() && Date.now() < meetingMs) {
       await delivery.sendToTelegram(
-        `⏰ *30 min reminder:* ${meeting.title}\n\n_Reply STOP to cancel reminders._`,
+        `⏰ *30 min reminder:* ${meeting.title}\n\n_Reply CANCEL to cancel reminders._`,
       );
       log.info(`Sent 30-min reminder for: ${meeting.title}`);
     }

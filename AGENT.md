@@ -38,9 +38,9 @@ Update the morning brief cron job (ID: `a9e14c46-e317-4c00-b607-ab69771d4db3`) s
 
 The workflow now handles lunch meeting reminders directly. After delivering the brief, it parses the calendar for meetings between 12:00 PM and 2:00 PM and sends Telegram reminders at 30 minutes and 10 minutes before each one. The workflow stays running until all reminders are sent (or cancelled).
 
-### Handling "stop" replies
+### Handling "cancel" replies
 
-When Lenny replies **STOP** in the Telegram chat, you need to send a signal to the running workflow to cancel remaining reminders. Run:
+When Lenny replies **CANCEL** in the Telegram chat, you need to send a signal to the running workflow to cancel remaining reminders. Run:
 
 ```
 cd /home/lennessy/workspace/durableclaw && npx temporal workflow signal --workflow-id morning-brief-$(date +%Y-%m-%d) --name stopReminders
@@ -51,8 +51,8 @@ The workflow ID follows the pattern `morning-brief-YYYY-MM-DD` (one per day). On
 ### What to watch for
 
 - After the brief is delivered, the workflow keeps running if there are lunch meetings — this is expected. Do not treat it as stuck.
-- The reminder messages include "_Reply STOP to cancel reminders._" so Lenny knows the option is available.
-- Only watch for the word "stop" (case-insensitive) as a standalone reply from Lenny in the Telegram chat. Other messages should be ignored.
+- The reminder messages include "_Reply CANCEL to cancel reminders._" so Lenny knows the option is available.
+- Only watch for the word "cancel" (case-insensitive) as a standalone reply from Lenny in the Telegram chat. Other messages should be ignored.
 
 ## Workflow steps
 

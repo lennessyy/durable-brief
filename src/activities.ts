@@ -150,7 +150,8 @@ ${input.uspsScans || 'Nothing from USPS.'}
 
 Requirements:
 - Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one "small dare".`;
+- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one fun fact about the human body.
+- IMPORTANT: Use simple formatting only. Bullet points with dashes (-) and bold/italics (**, *) are fine. NO tables and NO headers (no # symbols). Just use line breaks and simple formatting.`;
 
 
   const body = JSON.stringify({
@@ -207,10 +208,28 @@ export async function parseLunchMeetings(calendarText: string): Promise<LunchMee
 
   // gog output format: <calendar_id>  <event_id>  <start_iso>  <end_iso>  <title>
   // Fields are separated by 2+ whitespace characters
-  const isoPattern = /(\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2}):\d{2}[+-]\d{2}:\d{2})/;
+  const twoIsoPattern = /(\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2}):\d{2}[+-]\d{2}:\d{2})\s+(\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2}):\d{2}[+-]\d{2}:\d{2})/;
+
+  // First pass: find when the personal lunch block starts
+  let lunchStartHour: number | null = null;
+  let lunchStartMinute: number | null = null;
 
   for (const line of lines) {
-    const match = line.match(isoPattern);
+    const fields = line.trim().split(/\s{2,}/);
+    const title = fields[fields.length - 1] || '';
+    if (!title.toLowerCase().includes('lunch')) continue;
+
+    const match = line.match(twoIsoPattern);
+    if (!match) continue;
+
+    lunchStartHour = parseInt(match[2], 10);
+    lunchStartMinute = parseInt(match[3], 10);
+    break;
+  }
+
+  // Second pass: collect meetings between 12-2 PM that start after lunch ends
+  for (const line of lines) {
+    const match = line.match(twoIsoPattern);
     if (!match) continue;
 
     const hour = parseInt(match[2], 10);
@@ -225,6 +244,13 @@ export async function parseLunchMeetings(calendarText: string): Promise<LunchMee
 
     // Skip personal lunch events - only track actual meetings
     if (title.toLowerCase().includes('lunch')) continue;
+
+    // Skip meetings that start before the lunch block starts
+    if (lunchStartHour !== null && lunchStartMinute !== null) {
+      const meetingStartMins = hour * 60 + minute;
+      const lunchStartMins = lunchStartHour * 60 + lunchStartMinute;
+      if (meetingStartMins < lunchStartMins) continue;
+    }
 
     // Format a human-readable time like "12:30 PM"
     const displayHour = hour > 12 ? hour - 12 : hour;
