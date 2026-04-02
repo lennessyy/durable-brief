@@ -3,8 +3,11 @@ import asyncio
 from dotenv import load_dotenv
 load_dotenv()
 
+import dataclasses
+
+import temporalio.converter
 from temporalio.client import Client
-from temporalio.converter import DataConverter, ExternalStorage
+from temporalio.converter import ExternalStorage
 from temporalio.worker import Worker
 
 from activities import (
@@ -20,14 +23,15 @@ from workflows import MorningBriefWorkflow
 
 
 async def main() -> None:
-    converter = DataConverter(
+    data_converter = dataclasses.replace(
+        temporalio.converter.default(),
         external_storage=ExternalStorage(
             drivers=[LocalDiskStorageDriver()],
             payload_size_threshold=1_000,  # 1KB — low threshold for testing
         ),
     )
 
-    client = await Client.connect("localhost:7233", data_converter=converter)
+    client = await Client.connect("localhost:7233", data_converter=data_converter)
 
     worker = Worker(
         client,

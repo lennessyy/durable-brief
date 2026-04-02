@@ -14,11 +14,6 @@ from temporalio.converter import (
 
 
 class LocalDiskStorageDriver(StorageDriver):
-    """Offloads large payloads to local disk.
-
-    In production, replace this with an S3/GCS driver.
-    """
-
     def __init__(self, store_dir: str = "/tmp/temporal-payload-store") -> None:
         self._store_dir = store_dir
 
@@ -32,7 +27,6 @@ class LocalDiskStorageDriver(StorageDriver):
     ) -> list[StorageDriverClaim]:
         os.makedirs(self._store_dir, exist_ok=True)
 
-        # Use workflow identity for key structure when available
         prefix = self._store_dir
         sc = context.serialization_context
         if sc is not None and hasattr(sc, "workflow_id"):
@@ -45,7 +39,6 @@ class LocalDiskStorageDriver(StorageDriver):
             file_path = os.path.join(prefix, key)
             with open(file_path, "wb") as f:
                 f.write(payload.SerializeToString())
-            print(f"[storage] offloaded {len(payload.SerializeToString())} bytes → {file_path}")
             claims.append(StorageDriverClaim(claim_data={"path": file_path}))
         return claims
 
@@ -61,6 +54,5 @@ class LocalDiskStorageDriver(StorageDriver):
                 data = f.read()
             payload = Payload()
             payload.ParseFromString(data)
-            print(f"[storage] retrieved {len(data)} bytes ← {file_path}")
             payloads.append(payload)
         return payloads
