@@ -78,9 +78,10 @@ class MorningBriefWorkflow:
 
         workflow.logger.info("Morning brief complete, checking for lunch meetings")
 
-        lunch_meetings: list[LunchMeeting] = await workflow.execute_activity(
+        lunch_meetings = await workflow.execute_activity(
             "parse_lunch_meetings",
             calendar,
+            result_type=list[LunchMeeting],
             start_to_close_timeout=timedelta(seconds=15),
             retry_policy=retry_3,
         )
