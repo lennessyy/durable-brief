@@ -39,6 +39,7 @@ class LocalDiskStorageDriver(StorageDriver):
             file_path = os.path.join(prefix, key)
             with open(file_path, "wb") as f:
                 f.write(payload.SerializeToString())
+            print(f"[storage] offloaded {len(payload.SerializeToString())} bytes → {file_path}")
             claims.append(StorageDriverClaim(claim_data={"path": file_path}))
         return claims
 
@@ -54,5 +55,6 @@ class LocalDiskStorageDriver(StorageDriver):
                 data = f.read()
             payload = Payload()
             payload.ParseFromString(data)
+            print(f"[storage] retrieved {len(data)} bytes ← {file_path}")
             payloads.append(payload)
         return payloads
