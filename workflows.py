@@ -72,18 +72,11 @@ class MorningBriefWorkflow:
             ),
         )
 
-        workflow.logger.info("Brief generated, sending to Telegram")
-
-        await workflow.execute_activity(
-            "send_to_telegram",
-            brief,
-            start_to_close_timeout=timedelta(seconds=15),
-            retry_policy=retry_5,
-        )
+        workflow.logger.info(f"Brief generated:\n{brief}")
 
         self._brief = brief
 
-        workflow.logger.info("Morning brief delivered, checking for lunch meetings")
+        workflow.logger.info("Morning brief complete, checking for lunch meetings")
 
         lunch_meetings: list[LunchMeeting] = await workflow.execute_activity(
             "parse_lunch_meetings",
@@ -100,8 +93,6 @@ class MorningBriefWorkflow:
         return brief
 
     async def _send_lunch_reminders(self, meetings: list[LunchMeeting]) -> None:
-        from datetime import datetime
-
         delivery_retry = RetryPolicy(
             maximum_attempts=5,
             initial_interval=timedelta(seconds=3),
