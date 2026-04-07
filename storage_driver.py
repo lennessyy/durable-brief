@@ -2,7 +2,7 @@
 
 import os
 import uuid
-from typing import Sequence
+from collections.abc import Sequence
 
 from temporalio.api.common.v1 import Payload
 from temporalio.converter import (
@@ -10,6 +10,7 @@ from temporalio.converter import (
     StorageDriverClaim,
     StorageDriverStoreContext,
     StorageDriverRetrieveContext,
+    StorageDriverWorkflowInfo,
 )
 
 
@@ -28,9 +29,9 @@ class LocalDiskStorageDriver(StorageDriver):
         os.makedirs(self._store_dir, exist_ok=True)
 
         prefix = self._store_dir
-        sc = context.serialization_context
-        if sc is not None and hasattr(sc, "workflow_id"):
-            prefix = os.path.join(self._store_dir, sc.namespace, sc.workflow_id)
+        target = context.target
+        if isinstance(target, StorageDriverWorkflowInfo) and target.id:
+            prefix = os.path.join(self._store_dir, target.namespace, target.id)
             os.makedirs(prefix, exist_ok=True)
 
         claims = []
@@ -40,7 +41,7 @@ class LocalDiskStorageDriver(StorageDriver):
             with open(file_path, "wb") as f:
                 f.write(payload.SerializeToString())
             print(f"[storage] offloaded {len(payload.SerializeToString())} bytes → {file_path}")
-            claims.append(StorageDriverClaim(claim_data={"path": file_path}))
+            claims.append(StorageDriverClaim(data={"path": file_path}))
         return claims
 
     async def retrieve(
@@ -50,11 +51,11 @@ class LocalDiskStorageDriver(StorageDriver):
     ) -> list[Payload]:
         payloads = []
         for claim in claims:
-            file_path = claim.claim_data["path"]
+            file_path = claim.data["path"]
             with open(file_path, "rb") as f:
-                data = f.read()
+                raw = f.read()
             payload = Payload()
-            payload.ParseFromString(data)
-            print(f"[storage] retrieved {len(data)} bytes ← {file_path}")
+            payload.ParseFromString(raw)
+            print(f"[storage] retrieved {len(raw)} bytes ← {file_path}")
             payloads.append(payload)
         return payloads
