@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
+	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/contrib/aws/s3driver"
 	"go.temporal.io/sdk/contrib/aws/s3driver/awssdkv2"
@@ -57,14 +58,19 @@ func main() {
 	}
 
 	// Connect to Temporal with external storage configured.
-	// When both drivers are registered, the first driver (S3) is used for new
-	// payloads. The local driver stays available for retrieval only.
+	// When both drivers are registered, the first driver is used for new
+	// payloads. The other driver stays available for retrieval only.
+	extStorage := converter.ExternalStorage{
+		Drivers:              drivers,
+		PayloadSizeThreshold: 1_000, // 1KB — low threshold for testing
+	}
+	if len(drivers) > 1 {
+		extStorage.DriverSelector = &firstDriverSelector{preferred: drivers[0]}
+	}
+
 	c, err := client.Dial(client.Options{
-		HostPort: getenv("TEMPORAL_ADDRESS", "localhost:7233"),
-		ExternalStorage: converter.ExternalStorage{
-			Drivers:              drivers,
-			PayloadSizeThreshold: 1_000, // 1KB — low threshold for testing
-		},
+		HostPort:        getenv("TEMPORAL_ADDRESS", "localhost:7233"),
+		ExternalStorage: extStorage,
 	})
 	if err != nil {
 		log.Fatalf("connect to Temporal: %v", err)
@@ -87,4 +93,16 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// firstDriverSelector always routes new payloads to the preferred driver.
+type firstDriverSelector struct {
+	preferred converter.StorageDriver
+}
+
+func (s *firstDriverSelector) SelectDriver(
+	_ converter.StorageDriverStoreContext,
+	_ *commonpb.Payload,
+) (converter.StorageDriver, error) {
+	return s.preferred, nil
 }
