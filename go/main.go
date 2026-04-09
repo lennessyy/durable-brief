@@ -18,31 +18,51 @@ import (
 const taskQueue = "morning-brief-go"
 
 func main() {
+	driverMode := getenv("DRIVER", "both") // "s3", "local", or "both"
 	awsRegion := getenv("AWS_REGION", "us-east-2")
 	s3Bucket := getenv("S3_BUCKET", "payload-storage-364655878703-us-east-2-an")
+	localDir := getenv("LOCAL_STORE_DIR", "/tmp/temporal-payload-store")
 
-	// Load AWS credentials and region from the environment or ~/.aws config.
-	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion(awsRegion),
-	)
-	if err != nil {
-		log.Fatalf("load AWS config: %v", err)
-	}
+	var drivers []converter.StorageDriver
 
 	// Create the S3 storage driver.
-	driver, err := s3driver.NewDriver(s3driver.Options{
-		Client: awssdkv2.NewClient(awss3.NewFromConfig(cfg)),
-		Bucket: s3driver.StaticBucket(s3Bucket),
-	})
-	if err != nil {
-		log.Fatalf("create S3 driver: %v", err)
+	if driverMode == "s3" || driverMode == "both" {
+		cfg, err := config.LoadDefaultConfig(context.Background(),
+			config.WithRegion(awsRegion),
+		)
+		if err != nil {
+			log.Fatalf("load AWS config: %v", err)
+		}
+
+		s3Driver, err := s3driver.NewDriver(s3driver.Options{
+			Client: awssdkv2.NewClient(awss3.NewFromConfig(cfg)),
+			Bucket: s3driver.StaticBucket(s3Bucket),
+		})
+		if err != nil {
+			log.Fatalf("create S3 driver: %v", err)
+		}
+		drivers = append(drivers, s3Driver)
+		log.Printf("S3 driver enabled  bucket=%s", s3Bucket)
+	}
+
+	// Create the local disk storage driver.
+	if driverMode == "local" || driverMode == "both" {
+		localDriver := NewLocalDiskStorageDriver(localDir)
+		drivers = append(drivers, localDriver)
+		log.Printf("Local disk driver enabled  dir=%s", localDir)
+	}
+
+	if len(drivers) == 0 {
+		log.Fatalf("no drivers configured, set DRIVER to s3, local, or both")
 	}
 
 	// Connect to Temporal with external storage configured.
+	// When both drivers are registered, the first driver (S3) is used for new
+	// payloads. The local driver stays available for retrieval only.
 	c, err := client.Dial(client.Options{
 		HostPort: getenv("TEMPORAL_ADDRESS", "localhost:7233"),
 		ExternalStorage: converter.ExternalStorage{
-			Drivers:              []converter.StorageDriver{driver},
+			Drivers:              drivers,
 			PayloadSizeThreshold: 1_000, // 1KB — low threshold for testing
 		},
 	})
