@@ -150,7 +150,7 @@ ${input.uspsScans || 'Nothing from USPS.'}
 
 Requirements:
 - Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one fun fact about the human body.
+- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one fun fact about the human body (pick something fresh — today is ${new Date().toISOString().slice(0, 10)}).
 - IMPORTANT: Use simple formatting only. Bullet points with dashes (-) and bold/italics (**, *) are fine. NO tables and NO headers (no # symbols). Just use line breaks and simple formatting.`;
 
 
@@ -158,6 +158,7 @@ Requirements:
     model: process.env.LLM_MODEL || 'llama-3.3-70b',
     messages: [{ role: 'user', content: prompt }],
     max_tokens: 2048,
+    temperature: 1.0,
     venice_parameters: { strip_thinking_response: true },
   });
 
