@@ -1,9 +1,56 @@
 import { log } from '@temporalio/activity';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+const FACT_HISTORY_PATH = join(process.cwd(), 'data', 'fact-history.txt');
+const MAX_FACT_HISTORY = 14;
+
+// Common facts LLMs default to — always excluded regardless of history
+const OVERUSED_FACTS = [
+  'the stomach lining replaces itself every few days',
+  'bones are stronger than steel',
+  'humans share DNA with bananas',
+  'the heart pumps enough blood to fill a swimming pool',
+  'the brain uses 20% of the body\'s energy',
+  'nerve signals travel at 70 mph',
+  'the human body replaces itself every 7 years',
+  'the small intestine is about 6 meters long',
+  'you have more bacteria than human cells',
+  'the eye can distinguish 10 million colors',
+];
+
+async function readFactHistory(): Promise<string[]> {
+  try {
+    const content = await readFile(FACT_HISTORY_PATH, 'utf-8');
+    return content.split('\n').map((l) => l.trim()).filter(Boolean).slice(-MAX_FACT_HISTORY);
+  } catch {
+    return [];
+  }
+}
+
+async function appendFactHistory(fact: string): Promise<void> {
+  try {
+    const history = await readFactHistory();
+    history.push(fact.trim());
+    await writeFile(FACT_HISTORY_PATH, history.slice(-MAX_FACT_HISTORY).join('\n') + '\n');
+  } catch (err) {
+    log.warn(`Failed to write fact history: ${err}`);
+  }
+}
+
+function extractLastBullet(text: string): string | null {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (line.length > 20) {
+      return line.replace(/^[-•*]\s*/, '');
+    }
+  }
+  return null;
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -137,6 +184,12 @@ export interface BriefInput {
 }
 
 export async function generateBrief(input: BriefInput): Promise<string> {
+  const factHistory = await readFactHistory();
+  const allExcluded = [...OVERUSED_FACTS, ...factHistory];
+  const exclusionClause = allExcluded.length > 0
+    ? ` Do NOT use any of these previously used or overused facts:\n${allExcluded.map((f) => `  - ${f}`).join('\n')}`
+    : '';
+
   const prompt = `Generate Lenny's morning brief for today.
 
 **Calendar:**
@@ -150,7 +203,7 @@ ${input.uspsScans || 'Nothing from USPS.'}
 
 Requirements:
 - Keep it concise (10–20 lines), high-signal.
-- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one fun fact about the human body (pick something fresh — today is ${new Date().toISOString().slice(0, 10)}).
+- Sections: opening line (dangerous-muse vibes), calendar, lunch check (flag meetings 11am-2pm and anything within 30 min after), email (max 5 items, skip subscription agreement updates), USPS (who the mail is FROM based on the OCR text - this is important since there's no item data. OCR text are often garbled, so use heuristics to guess the sender.), Amazon (just the item name, no sender needed), end with one fun fact about the human body — pick something obscure and unexpected.${exclusionClause}
 - IMPORTANT: Use simple formatting only. Bullet points with dashes (-) and bold/italics (**, *) are fine. NO tables and NO headers (no # symbols). Just use line breaks and simple formatting.`;
 
 
@@ -191,6 +244,12 @@ Requirements:
   if (content.length > 4000) {
     content = content.slice(0, 4000) + '...[truncated]';
   }
+
+  const fact = extractLastBullet(content);
+  if (fact) {
+    await appendFactHistory(fact);
+  }
+
   return content;
 }
 
